@@ -34,7 +34,7 @@ input,textarea{width:100%;padding:12px;background:#111f2a;border:1px solid #4760
 <main><aside><div class="toolbar"><h2>Суҳбатҳо</h2><div class="help">Менеҷер метавонад ботро барои ҳар мизоҷ боздорад. Рамзи DEMO / БЕ AI маънои онро дорад, ки ҷавобҳо танҳо намунавӣ мебошанд.</div>
 <div style="margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:10px">
  <div style="display:flex;justify-content:space-between;align-items:center">
-  <strong style="font-size:13px">Ҳисобгирии API (30 рӯз)</strong>
+  <strong style="font-size:13px">Ҳисобгирии API (90 рӯз)</strong>
   <button class="ghost smallbtn" onclick="refreshUsage()">Навсозӣ</button>
  </div>
  <p class="help" id="apiUsageText">Маълумот бор мешавад...</p>
@@ -96,7 +96,7 @@ function error(e){
 }
 async function refreshUsage(){
  try{
-  const data=await call('/api/admin/usage?days=30');
+  const data=await call('/api/admin/usage?days=90');
   const t=data.totals;
   const breakdown=Object.entries(t.errors||{}).map(item=>item[0]+': '+item[1]).join('; ');
   let line='Ҷавобҳои API: '+t.successful+'; хатогиҳо: '+t.failed;
