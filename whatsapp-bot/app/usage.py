@@ -85,7 +85,7 @@ class UsageLedger:
         values = (
             details.get("input_tokens", 0),
             details.get("output_tokens", 0),
-            details.get("input_tokens_details", {}).get("cached_tokens", 0)
+            (details.get("input_tokens_details") or {}).get("cached_tokens", 0)
         )
         if any(type(x) is not int or x < 0 for x in values):
             return False
