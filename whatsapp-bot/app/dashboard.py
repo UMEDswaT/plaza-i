@@ -61,7 +61,13 @@ input,textarea{width:100%;padding:12px;background:#111f2a;border:1px solid #4760
     <button class="ghost" onclick="clearKnowledge()">Пок кардани форма</button>
    </div><div id="kbMessage" class="help" role="status"></div>
   </div>
-  <h3>Саволу ҷавобҳо барои баррасӣ ва тасдиқ</h3>
+  <div class="knowledgeActions" style="margin-bottom:14px">
+  <button class="ghost smallbtn" onclick="exportKnowledge()">Нусхаи эҳтиётии донишҳо (JSON)</button>
+  <label class="help" for="kbRestore" style="align-self:center">Барқарор кардан:</label>
+  <input id="kbRestore" type="file" accept=".json,application/json" style="max-width:260px"/>
+  <button class="ghost smallbtn" onclick="importKnowledge()">Ворид кардан барои баррасӣ</button>
+ </div>
+ <h3>Саволу ҷавобҳо барои баррасӣ ва тасдиқ</h3>
   <div id="knowledgeList"></div>
  </div>
 </div>
@@ -115,6 +121,31 @@ async function demo(){const box=document.getElementById('testtext');const text=b
 async function erase(){if(!current||!confirm('Тамоми паёмҳои ҳамин мизоҷ тоза шаванд?'))return;
  try{await call('/api/admin/chats/'+current,{method:'DELETE',headers:{'X-PLAZAI-Request':'dashboard'}});current='';latestChat='';document.getElementById('messages').replaceChildren();await refresh()}catch(e){error(e)}}
 
+
+async function exportKnowledge(){
+ try{
+  const data=await call('/api/admin/knowledge/export');
+  const file=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(file);const a=document.createElement('a');
+  a.href=url;a.download='plaza-i-approved-knowledge.json';a.click();
+  URL.revokeObjectURL(url);
+  kbStatus('Нусхаи донишҳои тасдиқшуда омода шуд. Онро дар ҷои бехатар нигоҳ доред.');
+ }catch(e){kbStatus(String(e))}
+}
+async function importKnowledge(){
+ try{
+  const file=document.getElementById('kbRestore').files[0];
+  if(!file)throw Error('Аввал файли JSON-ро интихоб кунед.');
+  if(file.size>1000000)throw Error('Файл аз ҳад калон аст.');
+  const data=JSON.parse(await file.text());
+  if(!Array.isArray(data.items)||data.format!=='plazai-approved-knowledge-v1')
+    throw Error('Формати нусха нодуруст аст.');
+  await call('/api/admin/knowledge/import',{...POST,body:JSON.stringify({items:data.items})});
+  document.getElementById('kbRestore').value='';
+  kbStatus('Донишҳо барои баррасӣ ворид шуданд; тасдиқ зарур аст.');
+  await loadKnowledge();
+ }catch(e){kbStatus(String(e))}
+}
 function kbStatus(msg){document.getElementById('kbMessage').textContent=msg}
 function clearKnowledge(){
  knowledgeEditing=0;document.getElementById('kbQuestion').value='';
