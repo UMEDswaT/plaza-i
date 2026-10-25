@@ -32,6 +32,15 @@ input,textarea{width:100%;padding:12px;background:#111f2a;border:1px solid #4760
 </style></head><body>
 <header><div><h1>PLAZA-I <span style="color:#67d4bc">/ CLIENT DESK</span></h1><small>Architecture & Design • Душанбе</small></div><div style="display:flex;gap:9px;align-items:center"><button class="ghost smallbtn" onclick="toggleKnowledge()" id="kbSwitch">Донишҳо</button><span class="pill" id="status">Санҷиш...</span></div></header>
 <main><aside><div class="toolbar"><h2>Суҳбатҳо</h2><div class="help">Менеҷер метавонад ботро барои ҳар мизоҷ боздорад. Рамзи DEMO / БЕ AI маънои онро дорад, ки ҷавобҳо танҳо намунавӣ мебошанд.</div>
+<div style="margin-top:13px;border:1px solid var(--line);border-radius:12px;padding:10px">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+    <strong style="font-size:13px">Истифодаи OpenAI API</strong>
+    <button class="ghost smallbtn" onclick="refreshUsage()">Навсозӣ</button>
+  </div>
+  <p class="help" id="apiUsageText">Маълумот бор мешавад...</p>
+  <p class="help" style="font-size:11px">Танҳо хароҷоти тахминии дархостҳои ба қайд гирифташуда.
+  Render Free метавонад ин оморро ҳангоми бозоғозӣ гум кунад. Барои маблағи воқеӣ OpenAI Billing-ро бинед.</p>
+</div>
 <div id="demo" style="display:none;margin-top:12px"><label class="help" for="testtext">Санҷиши бот (бе WhatsApp)</label><p class="help" id="apiPreviewInfo"></p><input id="testtext" placeholder="Ба ман дизайни хона лозим" style="margin-top:6px"><button style="width:100%;margin-top:8px" onclick="demo()">Санҷидани паём</button></div></div>
 <div id="chatlist"></div></aside>
 <section><div class="chatheader"><div><div id="chatid">Мизоҷро интихоб кунед</div><small id="modehelp">AI / менеҷер</small></div><div style="display:flex;gap:6px;align-items:center"><button class="ghost smallbtn" id="toggle" onclick="toggle()" disabled>Гузариш ба менеҷер</button><button class="ghost danger smallbtn" id="delete" onclick="erase()" disabled>Тоза</button></div></div>
@@ -85,6 +94,155 @@ function error(e){
   document.getElementById('alert').textContent=offline
     ?'Пайвасти браузер ба сервер қатъ шуд. Интернетро санҷед ва саҳифаро нав кунед.'
     :String(e);
+}
+async function refreshUsage(){
+ try{
+   const data=await call('/api/admin/usage?days=30');
+   const t=data.totals;
+   const p=t.estimated_usd.toFixed(4);
+   const errors=t.errors||{};
+   const problems=Object.entries(errors).map(([k,v])=>k+': '+v).join(' • ');
+   document.getElementById('apiUsageText').textContent=
+     '30 рӯз: '+t.successful+' ҷавоби API, '+t.failed+' хато. '+
+     'Хароҷоти тахминӣ: 
+ try{
+  const result=await call('/api/admin/chats');demoMode=result.demo;
+  document.getElementById('status').textContent=demoMode?(result.ai_preview?'AI / САНҶИШ':'DEMO / БЕ AI'):'LIVE / WHATSAPP';
+  document.getElementById('demo').style.display=demoMode?'block':'none';
+  document.getElementById('apiPreviewInfo').textContent=result.ai_preview
+    ?'Ин санҷиш аз OpenAI API истифода мекунад. Ҳангоми хатоҳои 429 ҷавоби офлайн нишон дода мешавад; ин ҷавоби AI нест.'
+    :'DEMO: танҳо ҷавобҳои намунавӣ, бе API ва бе WhatsApp.';
+  const list=document.getElementById('chatlist');list.replaceChildren();
+  result.items.forEach(c=>{
+    const b=el('button',undefined,'chat'+(c.wa_id===current?' selected':''));
+    b.append(el('strong',c.wa_id),el('span',c.mode==='human'?'МЕНЕҶЕР':'AI','label'),el('p',c.last_message));
+    b.onclick=()=>{current=c.wa_id;latestChat='';load()};list.append(b);
+  });
+  if(current)await load();
+ }catch(e){error(e)}
+}
+async function load(){
+ try{
+  const d=await call('/api/admin/chats/'+encodeURIComponent(current));mode=d.mode;
+  document.getElementById('chatid').textContent=current;
+  document.getElementById('modehelp').textContent=mode==='human'?'Менеҷер ҷавоб медиҳад':'AI ҷавоб медиҳад';
+  document.getElementById('toggle').textContent=mode==='human'?'Фаъол кардани AI':'Ба менеҷер супоридан';
+  document.getElementById('toggle').disabled=false;document.getElementById('delete').disabled=false;
+  document.getElementById('send').disabled=mode!=='human';
+  const msg=document.getElementById('messages');
+  const marker=JSON.stringify(d.messages);
+  if(marker===latestChat)return;
+  latestChat=marker;msg.replaceChildren();
+  d.messages.forEach(m=>{
+    let p=el('div',undefined,'bubble '+m.role);
+    p.append(el('span',m.role==='user'?'МИЗОҶ':(m.role==='staff'?'МЕНЕҶЕР':'PLAZA-I AI'),'who'),el('div',m.body));
+    msg.append(p);
+  });msg.scrollTop=msg.scrollHeight;
+ }catch(e){error(e)}
+}
+async function toggle(){try{const next=mode==='human'?'ai':'human';await call('/api/admin/chats/'+current+'/mode',{...POST,body:JSON.stringify({mode:next})});await refresh()}catch(e){error(e)}}
+async function send(){const box=document.getElementById('reply');const text=box.value.trim();if(!current||!text)return;
+ try{await call('/api/admin/chats/'+current+'/reply',{...POST,body:JSON.stringify({text})});box.value='';await refresh()}catch(e){error(e)}}
+async function demo(){const box=document.getElementById('testtext');const text=box.value.trim();if(!text)return;try{await call('/api/admin/demo',{...POST,body:JSON.stringify({text})});current='992900000001';box.value='';setTimeout(refresh,1100)}catch(e){error(e)}}
+async function erase(){if(!current||!confirm('Тамоми паёмҳои ҳамин мизоҷ тоза шаванд?'))return;
+ try{await call('/api/admin/chats/'+current,{method:'DELETE',headers:{'X-PLAZAI-Request':'dashboard'}});current='';latestChat='';document.getElementById('messages').replaceChildren();await refresh()}catch(e){error(e)}}
+
+
+async function exportKnowledge(){
+ try{
+  const data=await call('/api/admin/knowledge/export');
+  const file=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(file);const a=document.createElement('a');
+  a.href=url;a.download='plaza-i-approved-knowledge.json';a.click();
+  URL.revokeObjectURL(url);
+  kbStatus('Нусхаи донишҳои тасдиқшуда омода шуд. Онро дар ҷои бехатар нигоҳ доред.');
+ }catch(e){kbStatus(String(e))}
+}
+async function importKnowledge(){
+ try{
+  const file=document.getElementById('kbRestore').files[0];
+  if(!file)throw Error('Аввал файли JSON-ро интихоб кунед.');
+  if(file.size>1000000)throw Error('Файл аз ҳад калон аст.');
+  const data=JSON.parse(await file.text());
+  if(!Array.isArray(data.items)||data.format!=='plazai-approved-knowledge-v1')
+    throw Error('Формати нусха нодуруст аст.');
+  await call('/api/admin/knowledge/import',{...POST,body:JSON.stringify({items:data.items})});
+  document.getElementById('kbRestore').value='';
+  kbStatus('Донишҳо барои баррасӣ ворид шуданд; тасдиқ зарур аст.');
+  await loadKnowledge();
+ }catch(e){kbStatus(String(e))}
+}
+function kbStatus(msg){document.getElementById('kbMessage').textContent=msg}
+function clearKnowledge(){
+ knowledgeEditing=0;document.getElementById('kbQuestion').value='';
+ document.getElementById('kbAnswer').value='';
+ document.getElementById('kbTopic').value='general';
+ document.getElementById('kbSave').style.display='';
+ document.getElementById('kbApprove').style.display='none';
+ document.getElementById('kbReject').style.display='none';
+ kbStatus('');
+}
+async function toggleKnowledge(){
+ const panel=document.getElementById('knowledgePanel');
+ panel.hidden=!panel.hidden;
+ document.getElementById('kbSwitch').textContent=panel.hidden?'Донишҳо':'Суҳбатҳо';
+ if(!panel.hidden)await loadKnowledge();
+}
+async function loadKnowledge(){
+ try{
+  const data=await call('/api/admin/knowledge');
+  const list=document.getElementById('knowledgeList');list.replaceChildren();
+  if(!data.items.length){list.append(el('p','Донишҳо ҳанӯз ворид нашудаанд.','help'));return}
+  data.items.forEach(entry=>{
+   const card=el('div',undefined,'knowledgeEntry');
+   card.append(el('strong',entry.question),el('p',entry.answer),
+     el('div',entry.state+' • '+entry.topic+' • '+entry.origin,'sub'));
+   const choose=el('button',entry.state==='pending'?'Баррасӣ':'Намоиш','ghost smallbtn');
+   choose.onclick=()=>{
+    knowledgeEditing=entry.id;
+    document.getElementById('kbQuestion').value=entry.question;
+    document.getElementById('kbAnswer').value=entry.answer;
+    document.getElementById('kbTopic').value=['architecture','estimate','interior','author_supervision','general','from_staff'].includes(entry.topic)?entry.topic:'general';
+    document.getElementById('kbSave').style.display='none';
+    document.getElementById('kbApprove').style.display=entry.state==='approved'?'none':'';
+    document.getElementById('kbReject').style.display=entry.state==='rejected'?'none':'';
+    kbStatus('Савол ва ҷавобро ислоҳ карда, баъд тасдиқ намоед.');
+    document.getElementById('kbQuestion').scrollIntoView({behavior:'smooth',block:'center'});
+   };
+   card.append(choose);list.append(card);
+  });
+ }catch(e){kbStatus(String(e))}
+}
+async function saveKnowledge(){
+ try{
+  const question=document.getElementById('kbQuestion').value.trim();
+  const answer=document.getElementById('kbAnswer').value.trim();
+  const topic=document.getElementById('kbTopic').value;
+  await call('/api/admin/knowledge',{...POST,body:JSON.stringify({question,answer,topic})});
+  clearKnowledge();kbStatus('Ба навбати баррасӣ илова шуд.');await loadKnowledge();
+ }catch(e){kbStatus(String(e))}
+}
+async function reviewKnowledge(state){
+ if(!knowledgeEditing)return;
+ try{
+  const question=document.getElementById('kbQuestion').value.trim();
+  const answer=document.getElementById('kbAnswer').value.trim();
+  await call('/api/admin/knowledge/'+knowledgeEditing+'/review',
+   {...POST,body:JSON.stringify({state,question,answer})});
+  clearKnowledge();kbStatus(state==='approved'?'Ба донишҳои бот дохил шуд.':'Рад карда шуд.');
+  await loadKnowledge();
+ }catch(e){kbStatus(String(e))}
+}
+
+refresh();refreshUsage();setInterval(refresh,4500);setInterval(refreshUsage,60000);
+</script></body></html>'''
++p+'. '+
+     'Токенҳо: '+t.input_tokens+' воридотӣ / '+t.output_tokens+' ҷавобӣ.'+
+     (problems?' Хатоҳо: '+problems+'.':'')+
+     (t.unpriced_successes?' '+t.unpriced_successes+' дархост бе нархи маълум.':'');
+ }catch(e){
+   document.getElementById('apiUsageText').textContent='Омори API дастнорас: '+String(e);
+ }
 }
 async function refresh(){
  try{
