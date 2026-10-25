@@ -7,21 +7,35 @@ from app.prompt import SYSTEM_PROMPT, PRICE_REPLY_TG, PRICE_REPLY_RU
 PRICE_QUERY = re.compile(r"(?:нарх|нархаш|чанд\s*(?:сомон|пул)|маблағ|арзиш|расценк|сколько\s+стоит|сколько\s+будет|стоимост|цен[ауые]|прайс)", re.I)
 HUMAN_QUERY = re.compile(r"(?:менеҷер|менеджер|бо\s+одам|с\s+человеком|живой\s+оператор|сотрудник|оператор|позвонит|занг\s+зан|мастер\s+позвон)", re.I)
 PRICE_OUTPUT = re.compile(r"(?:\d[\d\s,.]*\s*(?:сомон\w*|tjs|usd|доллар\w*|руб\w*|\$|€)|(?:нарх|стоимост\w*|цена)\s*(?:аз|от)?\s*\d)", re.I)
-TG_MARKERS = re.compile(r"[ӣӯқҷғҳ]|\b(?:салом|ман|ба\s+ман|хона|мехоҳам|чанд|метавонед|меъмор|даркор|лоиҳа|шумо|ки|назди|бигӯед|ташаккур|нарх)\b", re.I)
+TG_MARKERS = re.compile(
+    r"[ӣӯқҷғҳ]|\\b(?:салом|ассалому|ман|хона|мехоҳам|мехохам|мехом|мешавад|метонед|метавонед|чанд|"
+    r"даркор|лоиҳа|куҷо|кучо|суроға|сурога|мехостам|мехохем|ташаккур|нарх|бигӯед|мегуед)\\b", re.I)
+TG_LATIN_MARKERS = re.compile(
+    r"\\b(?:salom|assalomu|man|mehoham|mekhoham|mekhom|loiha|khona|chand|darkor|kujo|suroga)\\b", re.I)
+RU_MARKERS = re.compile(
+    r"\\b(?:привет|здравствуйте|нужен|нужна|хочу|сколько|где|можно|спасибо|"
+    r"квартира|квартиры|квартиру|стоимость|менеджер|адрес|проект|подскажите|"
+    r"сделать|нужно|интересует|пожалуйста)\\b", re.I)
 
 
 def is_tajik(message: str, conversation=()) -> bool:
-    if TG_MARKERS.search(message):
+    """Detect the current language, preserving context for short ambiguous replies."""
+    if TG_MARKERS.search(message) or TG_LATIN_MARKERS.search(message):
         return True
-    if re.search(r"[а-яё]", message, re.I):
-        # Simple Cyrillic greetings can appear in either language.
-        if message.strip().lower() in {'салом', 'ассалому алайкум'}:
-            return True
+    if RU_MARKERS.search(message):
         return False
+    # The transcript may already contain the current user message.
     for item in reversed(list(conversation)):
-        if item['role'] == 'user' and TG_MARKERS.search(item['body']):
+        if item.get('role') != 'user':
+            continue
+        previous = item.get('body', '')
+        if previous == message:
+            continue
+        if TG_MARKERS.search(previous) or TG_LATIN_MARKERS.search(previous):
             return True
-    return True
+        if RU_MARKERS.search(previous):
+            return False
+    return not bool(re.search(r"[а-яё]", message, re.I))
 
 
 def needs_handoff(message: str) -> bool:
