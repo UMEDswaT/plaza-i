@@ -75,7 +75,7 @@ async def process_one(event):
             answer=handoff_message(user,history)
         elif user=='[MEDIA_NOT_SUPPORTED]':
             answer=MEDIA_TG if is_tajik(user,history) else MEDIA_RU
-        elif config.demo_mode:
+        elif config.demo_mode and not config.ai_preview_mode:
             answer=demo_reply(user,history)
         else:
             assert ai is not None
@@ -106,8 +106,9 @@ async def lifespan(app: FastAPI):
     config.check()
     store=Storage(config.database_path)
     store.recover()
-    if not config.demo_mode:
+    if not config.demo_mode or config.ai_preview_mode:
         ai=AIService(config.openai_api_key,config.openai_model)
+    if not config.demo_mode:
         wa=WhatsAppService(config.meta_access_token,config.meta_phone_number_id,config.meta_graph_version)
     task=asyncio.create_task(queue_worker())
     try:
@@ -129,7 +130,7 @@ app=FastAPI(title='PLAZA-I WhatsApp AI',version='1.0.0',lifespan=lifespan,docs_u
 
 @app.get('/health')
 def health():
-    return {'ok':True, 'demo':config.demo_mode}
+    return {'ok':True, 'demo':config.demo_mode, 'ai_preview':config.demo_mode and config.ai_preview_mode}
 
 
 @app.get('/webhook')
@@ -217,7 +218,8 @@ def admin_page():
 @app.get('/api/admin/chats',dependencies=[Depends(admin_auth)])
 def chats():
     assert store is not None
-    return {'items':store.list_chats(), 'demo':config.demo_mode}
+    return {'items':store.list_chats(), 'demo':config.demo_mode,
+            'ai_preview':config.demo_mode and config.ai_preview_mode}
 
 
 @app.get('/api/admin/chats/{wa_id}',dependencies=[Depends(admin_auth)])
