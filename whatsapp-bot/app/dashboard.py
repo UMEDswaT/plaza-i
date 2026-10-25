@@ -32,7 +32,7 @@ input,textarea{width:100%;padding:12px;background:#111f2a;border:1px solid #4760
 </style></head><body>
 <header><div><h1>PLAZA-I <span style="color:#67d4bc">/ CLIENT DESK</span></h1><small>Architecture & Design • Душанбе</small></div><div style="display:flex;gap:9px;align-items:center"><button class="ghost smallbtn" onclick="toggleKnowledge()" id="kbSwitch">Донишҳо</button><span class="pill" id="status">Санҷиш...</span></div></header>
 <main><aside><div class="toolbar"><h2>Суҳбатҳо</h2><div class="help">Менеҷер метавонад ботро барои ҳар мизоҷ боздорад. Рамзи DEMO / БЕ AI маънои онро дорад, ки ҷавобҳо танҳо намунавӣ мебошанд.</div>
-<div id="demo" style="display:none;margin-top:12px"><label class="help" for="testtext">Санҷиши бот (бе WhatsApp)</label><input id="testtext" placeholder="Ба ман дизайни хона лозим" style="margin-top:6px"><button style="width:100%;margin-top:8px" onclick="demo()">Санҷидани паём</button></div></div>
+<div id="demo" style="display:none;margin-top:12px"><label class="help" for="testtext">Санҷиши бот (бе WhatsApp)</label><p class="help" id="apiPreviewInfo"></p><input id="testtext" placeholder="Ба ман дизайни хона лозим" style="margin-top:6px"><button style="width:100%;margin-top:8px" onclick="demo()">Санҷидани паём</button></div></div>
 <div id="chatlist"></div></aside>
 <section><div class="chatheader"><div><div id="chatid">Мизоҷро интихоб кунед</div><small id="modehelp">AI / менеҷер</small></div><div style="display:flex;gap:6px;align-items:center"><button class="ghost smallbtn" id="toggle" onclick="toggle()" disabled>Гузариш ба менеҷер</button><button class="ghost danger smallbtn" id="delete" onclick="erase()" disabled>Тоза</button></div></div>
 <div id="messages"><div class="empty">Суҳбатро аз рӯйхат кушоед.</div></div>
@@ -80,12 +80,20 @@ async function call(path, options={}){
 }
 const POST={method:'POST',headers:{'Content-Type':'application/json','X-PLAZAI-Request':'dashboard'}};
 function el(name,text,klass){const d=document.createElement(name);if(text!==undefined)d.textContent=text;if(klass)d.className=klass;return d;}
-function error(e){document.getElementById('alert').textContent=String(e);}
+function error(e){
+  const offline=(e instanceof TypeError && String(e).includes('fetch'));
+  document.getElementById('alert').textContent=offline
+    ?'Пайвасти браузер ба сервер қатъ шуд. Интернетро санҷед ва саҳифаро нав кунед.'
+    :String(e);
+}
 async function refresh(){
  try{
   const result=await call('/api/admin/chats');demoMode=result.demo;
   document.getElementById('status').textContent=demoMode?(result.ai_preview?'AI / САНҶИШ':'DEMO / БЕ AI'):'LIVE / WHATSAPP';
   document.getElementById('demo').style.display=demoMode?'block':'none';
+  document.getElementById('apiPreviewInfo').textContent=result.ai_preview
+    ?'Ин санҷиш аз OpenAI API истифода мекунад. Ҳангоми хатоҳои 429 ҷавоби офлайн нишон дода мешавад; ин ҷавоби AI нест.'
+    :'DEMO: танҳо ҷавобҳои намунавӣ, бе API ва бе WhatsApp.';
   const list=document.getElementById('chatlist');list.replaceChildren();
   result.items.forEach(c=>{
     const b=el('button',undefined,'chat'+(c.wa_id===current?' selected':''));
