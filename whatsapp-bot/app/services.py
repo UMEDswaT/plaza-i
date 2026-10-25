@@ -1,5 +1,6 @@
 """AI and Meta WhatsApp communication."""
 import re
+import time
 import httpx
 from app.prompt import SYSTEM_PROMPT, PRICE_REPLY_TG, PRICE_REPLY_RU
 
@@ -129,14 +130,29 @@ def demo_reply(text: str, history=()) -> str:
         'Ин санҷиши офлайн аст ва ман ба ин савол ҷавоби тасдиқшуда надорам. Лутфан намуди хизмат ё объекти худро мушаххас кунед; дархостро ба менеҷер ҳам супоридан мумкин аст.',
         'Это офлайн-демонстрация, и подтверждённого ответа на этот вопрос пока нет. Уточните услугу или тип объекта; обращение можно передать менеджеру.')
 
+class AIServiceError(Exception):
+    """A safe, categorized OpenAI API failure; never expose response secrets."""
+
+    def __init__(self, code: str, status: int):
+        self.code = code
+        self.status = status
+        super().__init__(f"OpenAI status {status}: {code}")
+
+
 class AIService:
     def __init__(self, api_key: str, model: str):
         self.model=model
         self.api_key=api_key
         self.client=httpx.AsyncClient(timeout=25)
         self.knowledge_provider=None
+        self.blocked_until=0.0
+        self.blocked_code="limit"
 
     async def reply(self, history: list[dict]) -> str:
+        # A short circuit breaker prevents a queue of test messages from
+        # repeatedly calling an API while it is returning quota/rate errors.
+        if time.monotonic() < self.blocked_until:
+            raise AIServiceError(self.blocked_code, 429)
         # Our database holds the conversation; OpenAI response storage is disabled.
         input_items=[{'role': 'assistant' if m['role'] in ('assistant','staff') else 'user',
                       'content':m['body'][:3000]} for m in history]
@@ -158,6 +174,33 @@ class AIService:
                      'Content-Type':'application/json'},
             json={'model':self.model,'instructions':guidance,
                   'input':input_items,'store':False,'max_output_tokens':480})
+        if response.status_code == 429:
+            error = {}
+            try:
+                payload_error = response.json().get('error') or {}
+                if isinstance(payload_error, dict):
+                    error = payload_error
+            except (ValueError, AttributeError):
+                pass
+            code = str(error.get('code') or '')
+            category = str(error.get('type') or '')
+            quota_codes = {
+                'insufficient_quota',
+                'credit_balance_exhausted',
+                'organization_usage_limit_exceeded',
+                'organization_spend_limit_exceeded',
+                'project_spend_limit_exceeded',
+                'billing_hard_limit_reached',
+            }
+            classification = ('quota' if code in quota_codes or
+                              category == 'insufficient_quota' else 'limit')
+            self.blocked_code = classification
+            self.blocked_until = time.monotonic() + 60
+            raise AIServiceError(classification, 429)
+        if response.status_code in (401, 403):
+            raise AIServiceError('auth', response.status_code)
+        if response.status_code in (400, 404, 422):
+            raise AIServiceError('request', response.status_code)
         response.raise_for_status()
         payload=response.json()
         parts=[]
