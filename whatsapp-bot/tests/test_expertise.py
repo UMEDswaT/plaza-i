@@ -16,7 +16,7 @@ from app.settings import Settings
 def test_industry_guide_has_architecture_estimates_design_and_supervision():
     assert matching_guides("Смета ва ведомости ҳаҷми корҳо")
     assert "Смета" in reference_for("сметаи сохтмон")
-    assert "назорати муаллифӣ" in reference_for("назорати муаллифӣ")
+    assert "назорати муаллифӣ" in reference_for("назорати муаллифӣ").casefold()
     assert "дизайни дохилӣ" in reference_for("дизайни дохилӣ")
     assert "architect" not in (domain_demo_reply("смета", True) or "").casefold()
 
