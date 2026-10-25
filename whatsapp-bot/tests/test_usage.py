@@ -104,3 +104,10 @@ def test_preview_records_real_token_usage_from_mock_model(tmp_path,monkeypatch):
         assert totals["cached_input_tokens"]==500
         expected=((2500*.75+500*.075+300*4.5)/1_000_000)
         assert totals["estimated_usd"]==pytest.approx(expected,abs=1e-6)
+
+def test_dashboard_uses_90_day_usage_window():
+    from app.dashboard import HTML
+    assert "Ҳисобгирии API (90 рӯз)" in HTML
+    assert "/api/admin/usage?days=90" in HTML
+    assert "Ҳисобгирии API (30 рӯз)" not in HTML
+    assert "/api/admin/usage?days=30" not in HTML
