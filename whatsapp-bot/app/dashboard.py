@@ -32,6 +32,14 @@ input,textarea{width:100%;padding:12px;background:#111f2a;border:1px solid #4760
 </style></head><body>
 <header><div><h1>PLAZA-I <span style="color:#67d4bc">/ CLIENT DESK</span></h1><small>Architecture & Design • Душанбе</small></div><div style="display:flex;gap:9px;align-items:center"><button class="ghost smallbtn" onclick="toggleKnowledge()" id="kbSwitch">Донишҳо</button><span class="pill" id="status">Санҷиш...</span></div></header>
 <main><aside><div class="toolbar"><h2>Суҳбатҳо</h2><div class="help">Менеҷер метавонад ботро барои ҳар мизоҷ боздорад. Рамзи DEMO / БЕ AI маънои онро дорад, ки ҷавобҳо танҳо намунавӣ мебошанд.</div>
+<div style="margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:10px">
+ <div style="display:flex;justify-content:space-between;align-items:center">
+  <strong style="font-size:13px">Ҳисобгирии API (30 рӯз)</strong>
+  <button class="ghost smallbtn" onclick="refreshUsage()">Навсозӣ</button>
+ </div>
+ <p class="help" id="apiUsageText">Маълумот бор мешавад...</p>
+ <p class="help">Арзиши тахминӣ аст, на ҳисоби расмии OpenAI. Дар Render Free омор ҳангоми бозоғозӣ метавонад гум шавад.</p>
+</div>
 <div id="demo" style="display:none;margin-top:12px"><label class="help" for="testtext">Санҷиши бот (бе WhatsApp)</label><p class="help" id="apiPreviewInfo"></p><input id="testtext" placeholder="Ба ман дизайни хона лозим" style="margin-top:6px"><button style="width:100%;margin-top:8px" onclick="demo()">Санҷидани паём</button></div></div>
 <div id="chatlist"></div></aside>
 <section><div class="chatheader"><div><div id="chatid">Мизоҷро интихоб кунед</div><small id="modehelp">AI / менеҷер</small></div><div style="display:flex;gap:6px;align-items:center"><button class="ghost smallbtn" id="toggle" onclick="toggle()" disabled>Гузариш ба менеҷер</button><button class="ghost danger smallbtn" id="delete" onclick="erase()" disabled>Тоза</button></div></div>
@@ -85,6 +93,21 @@ function error(e){
   document.getElementById('alert').textContent=offline
     ?'Пайвасти браузер ба сервер қатъ шуд. Интернетро санҷед ва саҳифаро нав кунед.'
     :String(e);
+}
+async function refreshUsage(){
+ try{
+  const data=await call('/api/admin/usage?days=30');
+  const t=data.totals;
+  const breakdown=Object.entries(t.errors||{}).map(item=>item[0]+': '+item[1]).join('; ');
+  let line='Ҷавобҳои API: '+t.successful+'; хатогиҳо: '+t.failed;
+  line+='; хароҷоти тахминӣ (USD): '+Number(t.estimated_usd).toFixed(4);
+  line+='; воридотӣ: '+t.input_tokens+' токен, ҷавобӣ: '+t.output_tokens+' токен.';
+  if(breakdown)line+=' Сабаби хатогиҳо: '+breakdown;
+  if(t.unpriced_successes)line+=' Дархостҳои бенарх: '+t.unpriced_successes;
+  document.getElementById('apiUsageText').textContent=line;
+ }catch(err){
+  document.getElementById('apiUsageText').textContent='Омор дастнорас: '+String(err);
+ }
 }
 async function refresh(){
  try{
@@ -216,5 +239,5 @@ async function reviewKnowledge(state){
  }catch(e){kbStatus(String(e))}
 }
 
-refresh();setInterval(refresh,4500);
+refresh();refreshUsage();setInterval(refresh,4500);setInterval(refreshUsage,60000);
 </script></body></html>'''
