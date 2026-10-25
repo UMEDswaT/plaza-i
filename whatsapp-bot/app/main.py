@@ -191,7 +191,7 @@ async def webhook_receive(request: Request):
                 wa_id = msg.get('from')
                 if not isinstance(msg_id, str) or not msg_id or not isinstance(wa_id, str):
                     continue
-                if not re.fullmatch(r'\\d{6,20}', wa_id):
+                if not re.fullmatch(r'\d{6,20}', wa_id):
                     continue
                 if msg.get('type') == 'text':
                     text_data = msg.get('text', {})
