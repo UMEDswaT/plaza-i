@@ -161,26 +161,51 @@ async def webhook_receive(request: Request):
         raise HTTPException(400,'Invalid JSON')
     if not isinstance(data,dict) or data.get('object')!='whatsapp_business_account':
         return {'ok':True}
-    for entry in data.get('entry',[]):
-        for change in entry.get('changes',[]):
-            value=change.get('value',{})
-            if not isinstance(value,dict):
+    entries = data.get('entry', [])
+    if not isinstance(entries, list):
+        return {'ok': True}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        changes = entry.get('changes', [])
+        if not isinstance(changes, list):
+            continue
+        for change in changes:
+            if not isinstance(change, dict):
                 continue
-            meta_id=value.get('metadata',{}).get('phone_number_id')
-            if meta_id!=config.meta_phone_number_id:
+            value = change.get('value', {})
+            if not isinstance(value, dict):
                 continue
-            for msg in value.get('messages',[]):
-                msg_id=str(msg.get('id',''))
-                wa_id=str(msg.get('from',''))
-                if not msg_id or not re.fullmatch(r'\d{6,20}',wa_id):
+            metadata = value.get('metadata', {})
+            if not isinstance(metadata, dict):
+                continue
+            if metadata.get('phone_number_id') != config.meta_phone_number_id:
+                continue
+            messages = value.get('messages', [])
+            if not isinstance(messages, list):
+                continue
+            for msg in messages:
+                if not isinstance(msg, dict):
                     continue
-                if msg.get('type')=='text':
-                    body=(msg.get('text',{}).get('body') or '').strip()[:3500]
+                msg_id = msg.get('id')
+                wa_id = msg.get('from')
+                if not isinstance(msg_id, str) or not msg_id or not isinstance(wa_id, str):
+                    continue
+                if not re.fullmatch(r'\\d{6,20}', wa_id):
+                    continue
+                if msg.get('type') == 'text':
+                    text_data = msg.get('text', {})
+                    if not isinstance(text_data, dict):
+                        continue
+                    raw_body = text_data.get('body')
+                    if not isinstance(raw_body, str):
+                        continue
+                    body = raw_body.strip()[:3500]
                     if not body:
                         continue
                 else:
-                    body='[MEDIA_NOT_SUPPORTED]'
-                store.receive(msg_id,wa_id,body)
+                    body = '[MEDIA_NOT_SUPPORTED]'
+                store.receive(msg_id, wa_id, body)
     return {'ok':True}
 
 
