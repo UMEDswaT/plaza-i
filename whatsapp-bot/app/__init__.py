@@ -1,0 +1,1 @@
+"""PLAZA-I WhatsApp assistant."""
