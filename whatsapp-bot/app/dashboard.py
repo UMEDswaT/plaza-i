@@ -40,6 +40,12 @@ input,textarea{width:100%;padding:12px;background:#111f2a;border:1px solid #4760
  <p class="help" id="apiUsageText">Маълумот бор мешавад...</p>
  <p class="help">Арзиши тахминӣ аст, на ҳисоби расмии OpenAI. Дар Render Free омор ҳангоми бозоғозӣ метавонад гум шавад.</p>
 </div>
+<details style="padding:10px;margin-top:10px;border:1px solid var(--line);border-radius:10px">
+  <summary style="cursor:pointer;font-weight:600">Омодагии пайвасти WhatsApp ва AI</summary>
+  <p class="help" id="setupStatus">Санҷиши омодагӣ...</p>
+  <button class="ghost smallbtn" onclick="refreshSetupStatus()">Навсозии ҳолат</button>
+  <p class="help">Танҳо мавҷуд будани танзимот санҷида мешавад. Пардохт, соҳиби рақам ва кори воқеии Meta ин ҷо тасдиқ намешаванд.</p>
+ </details>
 <div id="demo" style="display:none;margin-top:12px"><label class="help" for="testtext">Санҷиши бот (бе WhatsApp)</label><p class="help" id="apiPreviewInfo"></p><input id="testtext" placeholder="Ба ман дизайни хона лозим" style="margin-top:6px"><button style="width:100%;margin-top:8px" onclick="demo()">Санҷидани паём</button></div></div>
 <div id="chatlist"></div></aside>
 <section><div class="chatheader"><div><div id="chatid">Мизоҷро интихоб кунед</div><small id="modehelp">AI / менеҷер</small></div><div style="display:flex;gap:6px;align-items:center"><button class="ghost smallbtn" id="toggle" onclick="toggle()" disabled>Гузариш ба менеҷер</button><button class="ghost danger smallbtn" id="delete" onclick="erase()" disabled>Тоза</button></div></div>
@@ -93,6 +99,21 @@ function error(e){
   document.getElementById('alert').textContent=offline
     ?'Пайвасти браузер ба сервер қатъ шуд. Интернетро санҷед ва саҳифаро нав кунед.'
     :String(e);
+}
+async function refreshSetupStatus(){
+ try{
+  const result=await call('/api/admin/integration-status');
+  const meta=result.whatsapp.credentials_configured;
+  const missing=Object.entries(meta).filter(([key,ready])=>!ready).map(([key])=>key);
+  let line='OpenAI: '+(result.openai.api_key_configured?'калид сабт шудааст':'калид нест')+
+    '; пардохт бояд дар OpenAI тасдиқ шавад.';
+  line+=' WhatsApp: '+(result.whatsapp.live_intake_enabled?'режими воқеӣ':'ҳоло санҷишӣ');
+  line+='; танзимоти Meta: '+(missing.length?'намерасад '+missing.join(', '):'ҳама номҳо пур карда шудаанд');
+  line+='; базаи доимӣ: тасдиқ нашудааст.';
+  document.getElementById('setupStatus').textContent=line;
+ }catch(err){
+  document.getElementById('setupStatus').textContent='Санҷиши танзимот дастнорас: '+String(err);
+ }
 }
 async function refreshUsage(){
  try{
@@ -239,5 +260,5 @@ async function reviewKnowledge(state){
  }catch(e){kbStatus(String(e))}
 }
 
-refresh();refreshUsage();setInterval(refresh,4500);setInterval(refreshUsage,60000);
+refresh();refreshUsage();refreshSetupStatus();setInterval(refresh,4500);setInterval(refreshUsage,60000);setInterval(refreshSetupStatus,60000);
 </script></body></html>'''
