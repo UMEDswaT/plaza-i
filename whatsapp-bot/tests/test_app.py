@@ -60,8 +60,8 @@ def test_webhook_signature_and_admin(tmp_path, monkeypatch):
         sig='sha256='+hmac.new(b'secret-meta',raw,hashlib.sha256).hexdigest()
         for _ in range(2):
             resp=client.post('/webhook',content=raw,headers={'x-hub-signature-256':sig})
-            assert resp.status_code==200
-        assert len(main.store.transcript('992900000001'))>=1
+            assert resp.status_code==403
+        assert len(main.store.transcript('992900000001'))==0
         assert client.get('/api/admin/chats').status_code==401
         assert client.get('/api/admin/chats',auth=auth).status_code==200
         assert client.post('/api/admin/chats/992900000001/mode',json={'mode':'human'},auth=auth).status_code==403
