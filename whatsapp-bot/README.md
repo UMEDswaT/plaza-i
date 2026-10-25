@@ -82,6 +82,40 @@ or verified licensing status. These require current project documents, official
 local standards and qualified personnel. No specific pricing, discounts or legal
 claims should be invented.
 
+### API usage and estimated running cost
+
+The staff dashboard now displays a rolling 30-day estimate for OpenAI token
+usage and categorized API errors. A protected endpoint at
+`GET /api/admin/usage?days=30` supports reporting periods of 1, 7, 30 and 90
+days. Results include the total number of API requests, successes/failures,
+input/output tokens, cached input tokens and estimated USD cost.
+
+The app uses the OpenAI Responses API's **reported** `usage` counters, including
+`input_tokens_details.cached_tokens`, instead of assuming a fixed price for
+each chat message. Estimates apply only to `gpt-5.4-mini` and its versioned
+snapshots, at published text prices of **$0.75 input, $0.075 cached input,
+$4.50 output per million tokens** (reviewed October 2026). For a different
+model, the app marks an API success as *unpriced* instead of displaying a
+possibly incorrect dollar amount.
+
+No prompt text, contact number, API key or answer is stored in the metering
+table. Event identifiers are SHA-256 hashed, and repeated events cannot be
+billed twice in the local usage report. All metrics require administrator
+authentication and the response is `Cache-Control: no-store`.
+
+**This is an estimate, not an OpenAI invoice, quota balance, or payment
+service.** Actual OpenAI usage and billing details must be viewed in OpenAI
+Platform. It does not cover Meta WhatsApp messaging fees, Render server costs,
+taxes or provider-side charges not included in the reported token usage.
+
+The current free Render service has ephemeral SQLite storage: the usage report
+can be lost after redeployment or restart. For a complete historical record,
+a separately approved, durable database is required.
+
+The bot does not initiate payments, adjust credit limits, or change billing
+configuration. OpenAI API returns HTTP 429 (quota or rate limit) until the
+account-level cause is resolved.
+
 ### Live operation
 
 Before setting `DEMO_MODE=0`:

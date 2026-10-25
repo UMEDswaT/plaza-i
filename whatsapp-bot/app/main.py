@@ -19,12 +19,14 @@ from app.services import AIService, AIServiceError, WhatsAppService, demo_reply,
 from app.prompt import MEDIA_TG, MEDIA_RU
 from app.dashboard import HTML
 from app.expertise import KnowledgeBase, domain_demo_reply
+from app.usage import UsageLedger
 
 logger = logging.getLogger('plazai')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 config = Settings()
 store: Storage | None = None
 knowledge: KnowledgeBase | None = None
+usage_ledger: UsageLedger | None = None
 ai: AIService | None = None
 wa: WhatsAppService | None = None
 basic_auth=HTTPBasic()
@@ -85,6 +87,12 @@ async def process_one(event):
         else:
             assert ai is not None
             answer=await ai.reply(history)
+            if usage_ledger is not None and getattr(ai, 'last_usage', None) is not None:
+                try:
+                    usage_ledger.record_success(msg_id, ai.model, ai.last_usage)
+                except Exception:
+                    # Accounting must not cause a second paid model call.
+                    logger.exception('API usage ledger write failed')
         if store.mode(wa_id)=='human':
             store.finish(msg_id)
             return
@@ -98,6 +106,11 @@ async def process_one(event):
             store.set_mode(wa_id,'human')
         store.finish(msg_id)
     except AIServiceError as exc:
+        if usage_ledger is not None:
+            try:
+                usage_ledger.record_error(msg_id, config.openai_model, exc.code)
+            except Exception:
+                logger.exception('API error ledger write failed')
         # Authentication, quota and rate-limit errors are NOT recoverable
         # by aggressive retries. Do not turn one message into 5 API calls.
         logger.warning("OpenAI unavailable (http_status=%s, category=%s)", exc.status, exc.code)
@@ -142,10 +155,11 @@ async def process_one(event):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global store, ai, wa, knowledge
+    global store, ai, wa, knowledge, usage_ledger
     config.check()
     store=Storage(config.database_path)
     knowledge=KnowledgeBase(config.database_path)
+    usage_ledger=UsageLedger(config.database_path)
     store.recover()
     if not config.demo_mode or config.ai_preview_mode:
         ai=AIService(config.openai_api_key,config.openai_model)
@@ -262,6 +276,16 @@ def chats():
     assert store is not None
     return {'items':store.list_chats(), 'demo':config.demo_mode,
             'ai_preview':config.demo_mode and config.ai_preview_mode}
+
+
+@app.get('/api/admin/usage', dependencies=[Depends(admin_auth)])
+def api_usage(days: int = 30):
+    assert usage_ledger is not None
+    try:
+        summary=usage_ledger.summary(days)
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+    return JSONResponse(summary, headers={'Cache-Control':'no-store'})
 
 
 @app.get('/api/admin/chats/{wa_id}',dependencies=[Depends(admin_auth)])
