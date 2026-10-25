@@ -28,6 +28,19 @@ Set these values using Render Environment Variables, never in Git:
 - `ADMIN_PASSWORD`: a random secret of at least 20 characters
 - `DATABASE_PATH=/app/data/plazai.sqlite3`
 
+### Optional real-AI preview (without WhatsApp)
+
+By default, the dashboard shows a **rule-based offline preview**, not a generative
+AI. It cannot answer arbitrary questions. To test the actual OpenAI model in
+the protected dashboard **without Meta/WhatsApp credentials**, first provision
+an OpenAI API key with billing limits. Then set `DEMO_MODE=1`,
+`AI_PREVIEW_MODE=1`, and `OPENAI_API_KEY` in Render Environment Variables.
+The banner changes to `AI / САНҶИШ`. API calls may incur charges. Messages
+are simulated and **are not sent to WhatsApp**.
+
+Do not confuse ChatGPT subscriptions with separate OpenAI API billing.
+Do not put API keys in source code, the demo chat, or GitHub.
+
 ### Live operation
 
 Before setting `DEMO_MODE=0`:
