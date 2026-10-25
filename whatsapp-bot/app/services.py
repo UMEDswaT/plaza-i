@@ -147,8 +147,10 @@ class AIService:
         self.knowledge_provider=None
         self.blocked_until=0.0
         self.blocked_code="limit"
+        self.last_usage=None
 
     async def reply(self, history: list[dict]) -> str:
+        self.last_usage=None
         # A short circuit breaker prevents a queue of test messages from
         # repeatedly calling an API while it is returning quota/rate errors.
         if time.monotonic() < self.blocked_until:
@@ -203,6 +205,8 @@ class AIService:
             raise AIServiceError('request', response.status_code)
         response.raise_for_status()
         payload=response.json()
+        if isinstance(payload,dict) and isinstance(payload.get("usage"),dict):
+            self.last_usage=payload["usage"]
         parts=[]
         for item in payload.get('output',[]):
             if item.get('type')=='message':
