@@ -79,6 +79,7 @@ def test_model_is_grounded_only_in_manager_approved_information(tmp_path):
                    "Смета аз ведомости ҳаҷми корҳо ва нархҳои санҷидашуда тартиб мешавад.")
     kb.review(idx,"approved")
     class DummyReply:
+        status_code = 200
         def raise_for_status(self): pass
         def json(self):
             return {"output":[{"type":"message","content":[{"type":"output_text","text":"Маълумотро бояд санҷид."}]}]}
