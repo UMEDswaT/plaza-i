@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 from app.settings import Settings
 from app.storage import Storage
-from app.services import AIService, WhatsAppService, demo_reply, is_tajik, needs_handoff, handoff_message
+from app.services import AIService, AIServiceError, WhatsAppService, demo_reply, is_tajik, needs_handoff, handoff_message
 from app.prompt import MEDIA_TG, MEDIA_RU
 from app.dashboard import HTML
 from app.expertise import KnowledgeBase, domain_demo_reply
@@ -96,6 +96,41 @@ async def process_one(event):
         store.append(wa_id,'assistant',answer)
         if handoff:
             store.set_mode(wa_id,'human')
+        store.finish(msg_id)
+    except AIServiceError as exc:
+        # Authentication, quota and rate-limit errors are NOT recoverable
+        # by aggressive retries. Do not turn one message into 5 API calls.
+        logger.warning("OpenAI unavailable (http_status=%s, category=%s)", exc.status, exc.code)
+        if config.demo_mode:
+            history = store.transcript(wa_id, through=event['msg_seq'], limit=20)
+            user = next((x['body'] for x in reversed(history) if x['role']=='user'), '')
+            tajik = is_tajik(user, history)
+            if exc.code == 'quota':
+                notice = ("OpenAI API: кредити истифода ё лимити хароҷот тамом шудааст. "
+                          "Дар OpenAI Platform бахшҳои Billing ва Limits-ро санҷед." if tajik else
+                          "OpenAI API: закончились кредиты или достигнут лимит расходов. "
+                          "Проверьте Billing и Limits в OpenAI Platform.")
+            elif exc.code == 'limit':
+                notice = ("OpenAI API: хатои 429. Лимити дархостҳо ё маблағи API-ро санҷед. "
+                          "Такрори пайдарпайи саволҳо мушкилро ҳал намекунад." if tajik else
+                          "OpenAI API: ошибка 429. Проверьте лимиты запросов и баланс API. "
+                          "Повторные попытки подряд не решат проблему.")
+            elif exc.code == 'auth':
+                notice = ("OpenAI API: калид ё иҷозат нодуруст аст. Танзимоти API-ро санҷед." if tajik else
+                          "OpenAI API: неверный ключ или разрешения. Проверьте доступ.")
+            else:
+                notice = ("OpenAI API дархостро қабул накард; модел ва иҷозатҳоро санҷед." if tajik else
+                          "OpenAI API отклонил запрос; проверьте модель и разрешения.")
+            # Offline responses are explicitly marked and never misrepresented
+            # as successful generative-AI answers.
+            assert knowledge is not None
+            offline = (knowledge.demo_answer(user)
+                       or domain_demo_reply(user, tajik)
+                       or demo_reply(user, history))
+            marker = "Ҷавоби намунавии ОФЛАЙН:" if tajik else "Пример ответа ОФЛАЙН:"
+            store.append(wa_id, 'assistant', "⚠️ " + notice + "\n\n" + marker + "\n" + offline)
+        else:
+            store.set_mode(wa_id, 'human')
         store.finish(msg_id)
     except Exception:
         # Do not log message text or API keys.
