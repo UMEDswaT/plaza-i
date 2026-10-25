@@ -19,6 +19,7 @@ class Settings:
     database_path: str = os.getenv("DATABASE_PATH", "./data/plazai.sqlite3")
     demo_mode: bool = os.getenv("DEMO_MODE", "0") == "1"
     ai_preview_mode: bool = os.getenv("AI_PREVIEW_MODE", "0") == "1"
+    suggest_from_staff: bool = os.getenv("SUGGEST_FROM_STAFF", "1") == "1"
 
     def check(self) -> None:
         if not self.admin_password or len(self.admin_password) < 12:
