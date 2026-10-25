@@ -189,6 +189,39 @@ def health():
     return {'ok':True, 'demo':config.demo_mode, 'ai_preview':config.demo_mode and config.ai_preview_mode}
 
 
+@app.get('/api/admin/integration-status', dependencies=[Depends(admin_auth)])
+def integration_status():
+    """Show safe, credential-free prerequisites, never credential values."""
+    required_meta = {
+        'META_ACCESS_TOKEN': bool(config.meta_access_token),
+        'META_APP_SECRET': bool(config.meta_app_secret),
+        'META_VERIFY_TOKEN': bool(config.meta_verify_token),
+        'META_PHONE_NUMBER_ID': bool(config.meta_phone_number_id),
+    }
+    return JSONResponse({
+        'openai': {
+            'api_key_configured': bool(config.openai_api_key),
+            'model': config.openai_model,
+            'billing_verified': False,
+            'note': 'OpenAI billing status must be verified in OpenAI Platform.',
+        },
+        'whatsapp': {
+            'credentials_configured': required_meta,
+            'all_credentials_configured': all(required_meta.values()),
+            'live_intake_enabled': not config.demo_mode,
+            'onboarding_verified': False,
+            'note': 'Meta onboarding, number ownership and signed inbound/outbound checks are required.',
+        },
+        'storage': {
+            'kind': 'local_sqlite',
+            'durability_verified': False,
+            'note': 'Durable storage is not verifiable from environment variables alone.',
+        },
+        'mode': 'demo' if config.demo_mode else 'live',
+    }, headers={'Cache-Control': 'no-store'})
+
+
+
 @app.get('/webhook')
 def webhook_check(request: Request):
     q=request.query_params
@@ -203,6 +236,10 @@ def webhook_check(request: Request):
 @app.post('/webhook')
 async def webhook_receive(request: Request):
     assert store is not None
+    # Fail closed: staging must not ingest live customer messages,
+    # even if Meta credentials have been entered for future setup.
+    if config.demo_mode:
+        raise HTTPException(403, 'Live WhatsApp intake is disabled in DEMO_MODE')
     raw=await request.body()
     if len(raw)>1_000_000:
         raise HTTPException(413,'Payload too large')

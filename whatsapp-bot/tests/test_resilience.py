@@ -24,12 +24,34 @@ def test_webhook_handles_signed_unexpected_shapes(tmp_path, monkeypatch):
     config = replace(
         Settings(),
         database_path=str(tmp_path / "test.db"),
-        demo_mode=True,
+        demo_mode=False,
+        ai_preview_mode=False,
         admin_password="temporary-test-password",
+        openai_api_key="dummy-openai-key",
+        meta_access_token="dummy-meta-token",
+        meta_verify_token="dummy-verify-token",
         meta_app_secret="local-test-secret",
         meta_phone_number_id="1234",
     )
     monkeypatch.setattr(main, "config", config)
+
+    class NoUseAI:
+        def __init__(self, *args):
+            self.model="test-model"
+            self.last_usage=None
+        async def reply(self, history):
+            raise AssertionError("Malformed messages must not trigger an AI call")
+        async def close(self):
+            pass
+    class NoUseWhatsApp:
+        def __init__(self, *args):
+            pass
+        async def send(self, *args):
+            raise AssertionError("Malformed messages must not send WhatsApp")
+        async def close(self):
+            pass
+    monkeypatch.setattr(main, "AIService", NoUseAI)
+    monkeypatch.setattr(main, "WhatsAppService", NoUseWhatsApp)
     payloads = [
         {"object": "whatsapp_business_account", "entry": "unexpected"},
         {"object": "whatsapp_business_account", "entry": [None, {"changes": None}]},

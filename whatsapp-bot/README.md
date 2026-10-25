@@ -116,6 +116,55 @@ The bot does not initiate payments, adjust credit limits, or change billing
 configuration. OpenAI API returns HTTP 429 (quota or rate limit) until the
 account-level cause is resolved.
 
+### OpenAI + Meta preflight (no credentials revealed)
+
+The protected staff dashboard has **Омодагии пайвасти WhatsApp ва AI**.
+Its endpoint `GET /api/admin/integration-status` reports only boolean
+presence/absence of required environment variable names. It does **not**
+return credentials, card data, Meta tokens, actual API billing status, or
+proof that the business number is registered. Authentication is required;
+responses are `Cache-Control: no-store`.
+
+**Fail closed:** `POST /webhook` rejects ALL real WhatsApp messages when
+`DEMO_MODE=1`, even if credentials were entered early. This prevents
+unintended collection of real customer messages on temporary Render Free
+storage. `GET /webhook` can still verify a matching `META_VERIFY_TOKEN`.
+Do not flip `DEMO_MODE=0` until OpenAI billing, Meta authorization,
+persistent storage, and production readiness have been verified.
+
+Recommended safe onboarding order:
+
+1. An authorized adult account owner sets up OpenAI API billing in OpenAI
+   Platform (separate from ChatGPT) and verifies that the quota 429 error
+   is resolved. Never paste payment details or API keys into a chat.
+2. The authorized Meta Business Portfolio admin opens the WhatsApp product
+   in their Meta developer app, reviews business eligibility, obtains the
+   WhatsApp Business Account and Phone Number IDs, verifies control of the
+   phone number and configures a system-user access token with the minimum
+   `whatsapp_business_messaging` permissions needed.
+3. If the number is currently used in the **WhatsApp Business phone app**,
+   verify the supported **Coexistence** onboarding method BEFORE enrolling
+   the number in Cloud API. Do not delete the WhatsApp Business app or
+   disconnect its number in the hope that it will work automatically.
+   Phone eligibility depends on Meta and the selected onboarding path.
+4. Configure Meta webhooks: callback
+   `https://plaza-i-whatsapp-bot.onrender.com/webhook`, and verify
+   token matching `META_VERIFY_TOKEN` in Render. Subscribe to messages.
+   Token must be a unique random secret; never publish it in GitHub.
+5. Set Render variables `META_ACCESS_TOKEN`, `META_APP_SECRET`,
+   `META_VERIFY_TOKEN`, `META_PHONE_NUMBER_ID`; keep `DEMO_MODE=1`
+   while staging. Use the dashboard to confirm the names are configured.
+6. Provision persistent storage, reliable always-on hosting, and appropriate
+   consent/retention protections before enabling real customer intake.
+   Then `DEMO_MODE=0`, `AI_PREVIEW_MODE=0`, deploy, verify inbound
+   signed webhooks and Meta API outbound delivery with an authorized
+   test recipient. This step should not be undertaken automatically
+   before the business owner authorizes the live rollout.
+
+Render Free sleeps after 15 minutes idle and its local SQLite data is
+lost on redeploy/restart/spin-down. Do not use it for live business chats.
+Production hosting/database plans require separately approved charges.
+
 ### Live operation
 
 Before setting `DEMO_MODE=0`:
