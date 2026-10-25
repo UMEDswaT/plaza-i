@@ -18,12 +18,17 @@ class Settings:
     admin_password: str = os.getenv("ADMIN_PASSWORD", "")
     database_path: str = os.getenv("DATABASE_PATH", "./data/plazai.sqlite3")
     demo_mode: bool = os.getenv("DEMO_MODE", "0") == "1"
+    ai_preview_mode: bool = os.getenv("AI_PREVIEW_MODE", "0") == "1"
 
     def check(self) -> None:
         if not self.admin_password or len(self.admin_password) < 12:
             raise RuntimeError("ADMIN_PASSWORD must have at least 12 characters")
         if self.demo_mode:
+            if self.ai_preview_mode and not self.openai_api_key:
+                raise RuntimeError("AI_PREVIEW_MODE requires OPENAI_API_KEY")
             return
+        if self.ai_preview_mode:
+            raise RuntimeError("AI_PREVIEW_MODE requires DEMO_MODE=1")
         required = {
             "OPENAI_API_KEY": self.openai_api_key,
             "META_ACCESS_TOKEN": self.meta_access_token,
