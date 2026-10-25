@@ -9,7 +9,7 @@ import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Depends
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 
@@ -312,6 +312,37 @@ def list_knowledge(state: str='all'):
         return {'items': knowledge.list_entries(state)}
     except ValueError as exc:
         raise HTTPException(400,str(exc))
+
+
+
+class KnowledgeImport(BaseModel):
+    items: list[KnowledgeDraft] = Field(min_length=1,max_length=200)
+
+
+@app.get('/api/admin/knowledge/export',dependencies=[Depends(admin_auth)])
+def export_knowledge():
+    assert knowledge is not None
+    entries = knowledge.list_entries('approved',limit=500)
+    # Approved reusable facts only: no phone numbers, raw conversations or passwords.
+    return JSONResponse(
+        {'format':'plazai-approved-knowledge-v1',
+         'items':[{'topic':row['topic'],'question':row['question'],
+                   'answer':row['answer']} for row in entries]},
+        headers={'Cache-Control':'no-store'})
+
+
+@app.post('/api/admin/knowledge/import',dependencies=[Depends(admin_auth),Depends(csrf_guard)])
+def import_knowledge(payload: KnowledgeImport):
+    assert knowledge is not None
+    count = 0
+    for entry in payload.items:
+        try:
+            knowledge.propose(entry.question,entry.answer,entry.topic,'import_review')
+            count += 1
+        except ValueError as exc:
+            raise HTTPException(400,str(exc))
+    # Restored knowledge is pending; an admin must review it before use.
+    return {'ok':True,'processed':count,'state':'pending'}
 
 
 @app.post('/api/admin/knowledge',dependencies=[Depends(admin_auth),Depends(csrf_guard)])
