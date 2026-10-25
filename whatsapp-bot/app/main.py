@@ -9,7 +9,7 @@ import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Depends
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 
@@ -18,11 +18,13 @@ from app.storage import Storage
 from app.services import AIService, WhatsAppService, demo_reply, is_tajik, needs_handoff, handoff_message
 from app.prompt import MEDIA_TG, MEDIA_RU
 from app.dashboard import HTML
+from app.expertise import KnowledgeBase, domain_demo_reply
 
 logger = logging.getLogger('plazai')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 config = Settings()
 store: Storage | None = None
+knowledge: KnowledgeBase | None = None
 ai: AIService | None = None
 wa: WhatsAppService | None = None
 basic_auth=HTTPBasic()
@@ -76,7 +78,10 @@ async def process_one(event):
         elif user=='[MEDIA_NOT_SUPPORTED]':
             answer=MEDIA_TG if is_tajik(user,history) else MEDIA_RU
         elif config.demo_mode and not config.ai_preview_mode:
-            answer=demo_reply(user,history)
+            assert knowledge is not None
+            answer=(knowledge.demo_answer(user)
+                    or domain_demo_reply(user, is_tajik(user, history))
+                    or demo_reply(user,history))
         else:
             assert ai is not None
             answer=await ai.reply(history)
@@ -102,12 +107,14 @@ async def process_one(event):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global store, ai, wa
+    global store, ai, wa, knowledge
     config.check()
     store=Storage(config.database_path)
+    knowledge=KnowledgeBase(config.database_path)
     store.recover()
     if not config.demo_mode or config.ai_preview_mode:
         ai=AIService(config.openai_api_key,config.openai_model)
+        ai.knowledge_provider=knowledge.context
     if not config.demo_mode:
         wa=WhatsAppService(config.meta_access_token,config.meta_phone_number_id,config.meta_graph_version)
     task=asyncio.create_task(queue_worker())
@@ -262,6 +269,16 @@ async def manual_reply(wa_id: str, body: TextRequest):
             logger.exception('Staff WhatsApp send failed')
             raise HTTPException(502,'WhatsApp did not accept the message')
     store.append(wa_id,'staff',body.text)
+    if config.suggest_from_staff and knowledge is not None:
+        # Learning candidates remain unpublished until explicitly approved.
+        try:
+            history = store.transcript(wa_id,limit=16)
+            question = next((m['body'] for m in reversed(history)
+                             if m['role']=='user'), None)
+            if question:
+                knowledge.suggest_from_staff(question,body.text)
+        except Exception:
+            logger.exception('Could not create knowledge suggestion')
     return {'ok':True}
 
 
@@ -273,6 +290,82 @@ def simulate(body: TextRequest):
     import uuid
     store.receive('demo-'+uuid.uuid4().hex,'992900000001',body.text)
     return {'ok':True, 'wa_id':'992900000001'}
+
+
+
+class KnowledgeDraft(BaseModel):
+    question: str = Field(min_length=8,max_length=500)
+    answer: str = Field(min_length=10,max_length=1500)
+    topic: str = Field(default='general',max_length=60)
+
+
+class KnowledgeReview(BaseModel):
+    state: str
+    question: str | None = Field(default=None, min_length=8,max_length=500)
+    answer: str | None = Field(default=None,min_length=10,max_length=1500)
+
+
+@app.get('/api/admin/knowledge',dependencies=[Depends(admin_auth)])
+def list_knowledge(state: str='all'):
+    assert knowledge is not None
+    try:
+        return {'items': knowledge.list_entries(state)}
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+
+
+
+class KnowledgeImport(BaseModel):
+    items: list[KnowledgeDraft] = Field(min_length=1,max_length=200)
+
+
+@app.get('/api/admin/knowledge/export',dependencies=[Depends(admin_auth)])
+def export_knowledge():
+    assert knowledge is not None
+    entries = knowledge.list_entries('approved',limit=500)
+    # Approved reusable facts only: no phone numbers, raw conversations or passwords.
+    return JSONResponse(
+        {'format':'plazai-approved-knowledge-v1',
+         'items':[{'topic':row['topic'],'question':row['question'],
+                   'answer':row['answer']} for row in entries]},
+        headers={'Cache-Control':'no-store'})
+
+
+@app.post('/api/admin/knowledge/import',dependencies=[Depends(admin_auth),Depends(csrf_guard)])
+def import_knowledge(payload: KnowledgeImport):
+    assert knowledge is not None
+    count = 0
+    for entry in payload.items:
+        try:
+            knowledge.propose(entry.question,entry.answer,entry.topic,'import_review')
+            count += 1
+        except ValueError as exc:
+            raise HTTPException(400,str(exc))
+    # Restored knowledge is pending; an admin must review it before use.
+    return {'ok':True,'processed':count,'state':'pending'}
+
+
+@app.post('/api/admin/knowledge',dependencies=[Depends(admin_auth),Depends(csrf_guard)])
+def propose_knowledge(draft: KnowledgeDraft):
+    assert knowledge is not None
+    try:
+        entry_id=knowledge.propose(draft.question,draft.answer,draft.topic,'manager')
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+    return {'ok':True,'id':entry_id,'state':'pending'}
+
+
+@app.post('/api/admin/knowledge/{entry_id}/review',
+          dependencies=[Depends(admin_auth),Depends(csrf_guard)])
+def review_knowledge(entry_id: int, review: KnowledgeReview):
+    assert knowledge is not None
+    try:
+        knowledge.review(entry_id,review.state,review.question,review.answer)
+    except KeyError:
+        raise HTTPException(404,'Unknown knowledge entry')
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+    return {'ok':True,'id':entry_id,'state':review.state}
 
 
 @app.delete('/api/admin/chats/{wa_id}',dependencies=[Depends(admin_auth),Depends(csrf_guard)])

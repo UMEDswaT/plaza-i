@@ -20,8 +20,17 @@ input,textarea{width:100%;padding:12px;background:#111f2a;border:1px solid #4760
 .bottom{padding:14px 18px;border-top:1px solid var(--line);display:flex;gap:10px;align-items:stretch}.bottom textarea{flex:1}.empty{color:var(--muted);margin:auto;padding:24px;text-align:center}
 #alert{color:var(--danger);font-size:13px;min-height:1.4em;padding-top:8px}.smallbtn{padding:9px 10px;font-size:12px}
 @media(max-width:740px){header{height:60px;padding:12px}main{height:calc(100dvh - 60px);grid-template-columns:1fr}aside{max-height:32vh;border-right:none;border-bottom:1px solid var(--line)}section{min-height:0}.toolbar{padding:10px}#messages{padding:12px}.bottom{padding:10px}.bubble{max-width:91%}}
+
+.knowledgePanel{position:fixed;inset:72px 0 0;background:var(--bg);z-index:10;overflow:auto;padding:20px}
+.knowledgePanel[hidden]{display:none}.knowledgeWrap{max-width:980px;margin:0 auto}
+.knowledgeForm{display:grid;gap:10px;margin:14px 0 20px}.knowledgeForm textarea{min-height:100px}
+.knowledgeActions{display:flex;gap:8px;flex-wrap:wrap}
+.knowledgeEntry{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:9px}
+.knowledgeEntry strong{font-size:14px}.knowledgeEntry p{margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.knowledgeEntry .sub{font-size:12px;color:var(--muted)}.knowledgeEntry button{margin-top:5px}
+@media(max-width:740px){.knowledgePanel{inset:60px 0 0;padding:12px}}
 </style></head><body>
-<header><div><h1>PLAZA-I <span style="color:#67d4bc">/ CLIENT DESK</span></h1><small>Architecture & Design • Душанбе</small></div><span class="pill" id="status">Санҷиш...</span></header>
+<header><div><h1>PLAZA-I <span style="color:#67d4bc">/ CLIENT DESK</span></h1><small>Architecture & Design • Душанбе</small></div><div style="display:flex;gap:9px;align-items:center"><button class="ghost smallbtn" onclick="toggleKnowledge()" id="kbSwitch">Донишҳо</button><span class="pill" id="status">Санҷиш...</span></div></header>
 <main><aside><div class="toolbar"><h2>Суҳбатҳо</h2><div class="help">Менеҷер метавонад ботро барои ҳар мизоҷ боздорад. Рамзи DEMO / БЕ AI маънои онро дорад, ки ҷавобҳо танҳо намунавӣ мебошанд.</div>
 <div id="demo" style="display:none;margin-top:12px"><label class="help" for="testtext">Санҷиши бот (бе WhatsApp)</label><input id="testtext" placeholder="Ба ман дизайни хона лозим" style="margin-top:6px"><button style="width:100%;margin-top:8px" onclick="demo()">Санҷидани паём</button></div></div>
 <div id="chatlist"></div></aside>
@@ -30,8 +39,40 @@ input,textarea{width:100%;padding:12px;background:#111f2a;border:1px solid #4760
 <div class="bottom"><textarea id="reply" placeholder="Ҷавоби менеҷер..." aria-label="Ҷавоби менеҷер"></textarea><button id="send" onclick="send()" disabled>Ирсол</button></div>
 <div id="alert" role="status" style="padding-left:15px"></div>
 </section></main>
+<div class="knowledgePanel" id="knowledgePanel" hidden>
+ <div class="knowledgeWrap">
+  <h2>Маркази донишҳои PLAZA-I</h2>
+  <p class="help">Бот фақат донишҳои тасдиқшударо истифода мебарад. Ҷавобҳои менеҷер пешниҳод мешаванд; саволҳои мизоҷон худкор ҳамчун далели дуруст қабул намешаванд. Маълумоти шахсиро ба донишҳо илова накунед.</p>
+  <div class="knowledgeForm">
+   <label class="help" for="kbTopic">Мавзӯъ</label>
+   <select id="kbTopic" style="width:100%;padding:12px;background:#111f2a;color:var(--text);border:1px solid #476070;border-radius:10px">
+    <option value="architecture">Меъморӣ</option><option value="estimate">Смета</option>
+    <option value="interior">Дизайн</option><option value="author_supervision">Назорати муаллифӣ</option>
+    <option value="general">Дигар</option><option value="from_staff">Суҳбати менеҷер</option>
+   </select>
+   <label class="help" for="kbQuestion">Саволи умумӣ (бе маълумоти мизоҷ)</label>
+   <textarea id="kbQuestion" maxlength="500" placeholder="Смета чӣ гуна таҳия мешавад?"></textarea>
+   <label class="help" for="kbAnswer">Ҷавоби санҷидашуда</label>
+   <textarea id="kbAnswer" maxlength="1500" placeholder="Ҷавоби умумӣ ва тасдиқшудаи ширкат"></textarea>
+   <div class="knowledgeActions">
+    <button id="kbSave" onclick="saveKnowledge()">Ба баррасӣ илова кардан</button>
+    <button class="ghost" id="kbApprove" onclick="reviewKnowledge('approved')" style="display:none">Тасдиқ кардан</button>
+    <button class="ghost danger" id="kbReject" onclick="reviewKnowledge('rejected')" style="display:none">Рад кардан</button>
+    <button class="ghost" onclick="clearKnowledge()">Пок кардани форма</button>
+   </div><div id="kbMessage" class="help" role="status"></div>
+  </div>
+  <div class="knowledgeActions" style="margin-bottom:14px">
+  <button class="ghost smallbtn" onclick="exportKnowledge()">Нусхаи эҳтиётии донишҳо (JSON)</button>
+  <label class="help" for="kbRestore" style="align-self:center">Барқарор кардан:</label>
+  <input id="kbRestore" type="file" accept=".json,application/json" style="max-width:260px"/>
+  <button class="ghost smallbtn" onclick="importKnowledge()">Ворид кардан барои баррасӣ</button>
+ </div>
+ <h3>Саволу ҷавобҳо барои баррасӣ ва тасдиқ</h3>
+  <div id="knowledgeList"></div>
+ </div>
+</div>
 <script>
-let current='',mode='',demoMode=false,latestChat='';
+let current='',mode='',demoMode=false,latestChat='',knowledgeEditing=0;
 async function call(path, options={}){
   const response=await fetch(path,{credentials:'same-origin',...options});
   if(!response.ok)throw Error('Хатои сервер: '+response.status+' '+await response.text());
@@ -79,5 +120,93 @@ async function send(){const box=document.getElementById('reply');const text=box.
 async function demo(){const box=document.getElementById('testtext');const text=box.value.trim();if(!text)return;try{await call('/api/admin/demo',{...POST,body:JSON.stringify({text})});current='992900000001';box.value='';setTimeout(refresh,1100)}catch(e){error(e)}}
 async function erase(){if(!current||!confirm('Тамоми паёмҳои ҳамин мизоҷ тоза шаванд?'))return;
  try{await call('/api/admin/chats/'+current,{method:'DELETE',headers:{'X-PLAZAI-Request':'dashboard'}});current='';latestChat='';document.getElementById('messages').replaceChildren();await refresh()}catch(e){error(e)}}
+
+
+async function exportKnowledge(){
+ try{
+  const data=await call('/api/admin/knowledge/export');
+  const file=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(file);const a=document.createElement('a');
+  a.href=url;a.download='plaza-i-approved-knowledge.json';a.click();
+  URL.revokeObjectURL(url);
+  kbStatus('Нусхаи донишҳои тасдиқшуда омода шуд. Онро дар ҷои бехатар нигоҳ доред.');
+ }catch(e){kbStatus(String(e))}
+}
+async function importKnowledge(){
+ try{
+  const file=document.getElementById('kbRestore').files[0];
+  if(!file)throw Error('Аввал файли JSON-ро интихоб кунед.');
+  if(file.size>1000000)throw Error('Файл аз ҳад калон аст.');
+  const data=JSON.parse(await file.text());
+  if(!Array.isArray(data.items)||data.format!=='plazai-approved-knowledge-v1')
+    throw Error('Формати нусха нодуруст аст.');
+  await call('/api/admin/knowledge/import',{...POST,body:JSON.stringify({items:data.items})});
+  document.getElementById('kbRestore').value='';
+  kbStatus('Донишҳо барои баррасӣ ворид шуданд; тасдиқ зарур аст.');
+  await loadKnowledge();
+ }catch(e){kbStatus(String(e))}
+}
+function kbStatus(msg){document.getElementById('kbMessage').textContent=msg}
+function clearKnowledge(){
+ knowledgeEditing=0;document.getElementById('kbQuestion').value='';
+ document.getElementById('kbAnswer').value='';
+ document.getElementById('kbTopic').value='general';
+ document.getElementById('kbSave').style.display='';
+ document.getElementById('kbApprove').style.display='none';
+ document.getElementById('kbReject').style.display='none';
+ kbStatus('');
+}
+async function toggleKnowledge(){
+ const panel=document.getElementById('knowledgePanel');
+ panel.hidden=!panel.hidden;
+ document.getElementById('kbSwitch').textContent=panel.hidden?'Донишҳо':'Суҳбатҳо';
+ if(!panel.hidden)await loadKnowledge();
+}
+async function loadKnowledge(){
+ try{
+  const data=await call('/api/admin/knowledge');
+  const list=document.getElementById('knowledgeList');list.replaceChildren();
+  if(!data.items.length){list.append(el('p','Донишҳо ҳанӯз ворид нашудаанд.','help'));return}
+  data.items.forEach(entry=>{
+   const card=el('div',undefined,'knowledgeEntry');
+   card.append(el('strong',entry.question),el('p',entry.answer),
+     el('div',entry.state+' • '+entry.topic+' • '+entry.origin,'sub'));
+   const choose=el('button',entry.state==='pending'?'Баррасӣ':'Намоиш','ghost smallbtn');
+   choose.onclick=()=>{
+    knowledgeEditing=entry.id;
+    document.getElementById('kbQuestion').value=entry.question;
+    document.getElementById('kbAnswer').value=entry.answer;
+    document.getElementById('kbTopic').value=['architecture','estimate','interior','author_supervision','general','from_staff'].includes(entry.topic)?entry.topic:'general';
+    document.getElementById('kbSave').style.display='none';
+    document.getElementById('kbApprove').style.display=entry.state==='approved'?'none':'';
+    document.getElementById('kbReject').style.display=entry.state==='rejected'?'none':'';
+    kbStatus('Савол ва ҷавобро ислоҳ карда, баъд тасдиқ намоед.');
+    document.getElementById('kbQuestion').scrollIntoView({behavior:'smooth',block:'center'});
+   };
+   card.append(choose);list.append(card);
+  });
+ }catch(e){kbStatus(String(e))}
+}
+async function saveKnowledge(){
+ try{
+  const question=document.getElementById('kbQuestion').value.trim();
+  const answer=document.getElementById('kbAnswer').value.trim();
+  const topic=document.getElementById('kbTopic').value;
+  await call('/api/admin/knowledge',{...POST,body:JSON.stringify({question,answer,topic})});
+  clearKnowledge();kbStatus('Ба навбати баррасӣ илова шуд.');await loadKnowledge();
+ }catch(e){kbStatus(String(e))}
+}
+async function reviewKnowledge(state){
+ if(!knowledgeEditing)return;
+ try{
+  const question=document.getElementById('kbQuestion').value.trim();
+  const answer=document.getElementById('kbAnswer').value.trim();
+  await call('/api/admin/knowledge/'+knowledgeEditing+'/review',
+   {...POST,body:JSON.stringify({state,question,answer})});
+  clearKnowledge();kbStatus(state==='approved'?'Ба донишҳои бот дохил шуд.':'Рад карда шуд.');
+  await loadKnowledge();
+ }catch(e){kbStatus(String(e))}
+}
+
 refresh();setInterval(refresh,4500);
 </script></body></html>'''
