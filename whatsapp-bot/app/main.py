@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from app.settings import Settings
 from app.storage import Storage
 from app.services import AIService, AIServiceError, WhatsAppService, demo_reply, is_tajik, needs_handoff, handoff_message
+from app.freellmapi import FreeLLMAPIService
 from app.prompt import MEDIA_TG, MEDIA_RU
 from app.dashboard import HTML
 from app.expertise import KnowledgeBase, domain_demo_reply
@@ -108,7 +109,7 @@ async def process_one(event):
     except AIServiceError as exc:
         if usage_ledger is not None:
             try:
-                usage_ledger.record_error(msg_id, config.openai_model, exc.code)
+                usage_ledger.record_error(msg_id, ai.model if ai else config.openai_model, exc.code)
             except Exception:
                 logger.exception('API error ledger write failed')
         # Authentication, quota and rate-limit errors are NOT recoverable
@@ -162,7 +163,12 @@ async def lifespan(app: FastAPI):
     usage_ledger=UsageLedger(config.database_path)
     store.recover()
     if not config.demo_mode or config.ai_preview_mode:
-        ai=AIService(config.openai_api_key,config.openai_model)
+        if config.ai_provider == 'freellmapi':
+            ai=FreeLLMAPIService(
+                config.freellmapi_api_key, config.freellmapi_model,
+                config.freellmapi_base_url)
+        else:
+            ai=AIService(config.openai_api_key,config.openai_model)
         ai.knowledge_provider=knowledge.context
     if not config.demo_mode:
         wa=WhatsAppService(config.meta_access_token,config.meta_phone_number_id,config.meta_graph_version)
@@ -200,6 +206,9 @@ def integration_status():
     }
     return JSONResponse({
         'openai': {
+            'provider': config.ai_provider,
+            'free_llm_preview_only': config.ai_provider == 'freellmapi',
+            'free_llm_endpoint_configured': bool(config.freellmapi_api_key) if config.ai_provider == 'freellmapi' else False,
             'api_key_configured': bool(config.openai_api_key),
             'model': config.openai_model,
             'billing_verified': False,
