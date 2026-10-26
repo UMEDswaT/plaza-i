@@ -9,6 +9,10 @@ load_dotenv()
 class Settings:
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
+    ai_provider: str = os.getenv("AI_PROVIDER", "openai").lower()
+    freellmapi_base_url: str = os.getenv("FREELLMAPI_BASE_URL", "http://127.0.0.1:3001/v1")
+    freellmapi_api_key: str = os.getenv("FREELLMAPI_API_KEY", "")
+    freellmapi_model: str = os.getenv("FREELLMAPI_MODEL", "auto")
     meta_access_token: str = os.getenv("META_ACCESS_TOKEN", "")
     meta_app_secret: str = os.getenv("META_APP_SECRET", "")
     meta_verify_token: str = os.getenv("META_VERIFY_TOKEN", "")
@@ -24,6 +28,26 @@ class Settings:
     def check(self) -> None:
         if not self.admin_password or len(self.admin_password) < 12:
             raise RuntimeError("ADMIN_PASSWORD must have at least 12 characters")
+        if self.ai_provider not in ("openai", "freellmapi"):
+            raise RuntimeError("AI_PROVIDER must be openai or freellmapi")
+        if self.ai_provider == "freellmapi":
+            # Experimental local-only, synthetic-data preview. Never send
+            # live customer messages through a personal free-tier router.
+            if not (self.demo_mode and self.ai_preview_mode):
+                raise RuntimeError("FreeLLMAPI requires DEMO_MODE=1 and AI_PREVIEW_MODE=1")
+            if not self.freellmapi_api_key or not self.freellmapi_base_url or not self.freellmapi_model:
+                raise RuntimeError("FreeLLMAPI preview requires URL, API key and model")
+            from app.freellmapi import FreeLLMAPIService
+            # Validate endpoint before accepting an untrusted network URL.
+            from urllib.parse import urlsplit
+            parsed = urlsplit(self.freellmapi_base_url)
+            if (not parsed.hostname or parsed.query or parsed.fragment or
+                parsed.username or parsed.password or
+                not self.freellmapi_base_url.rstrip("/").endswith("/v1") or
+                (parsed.scheme != "https" and not
+                 (parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1")))):
+                raise RuntimeError("FreeLLMAPI endpoint requires HTTPS or loopback HTTP and /v1")
+            return
         if self.demo_mode:
             if self.ai_preview_mode and not self.openai_api_key:
                 raise RuntimeError("AI_PREVIEW_MODE requires OPENAI_API_KEY")
